@@ -1,6 +1,6 @@
 {
   "name": "@openqlabs/drm-db",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "The prisma client for the DRM database.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
