@@ -1,0 +1,24 @@
+{
+  "name": "@openqlabs/drm-db",
+  "version": "0.0.1",
+  "description": "The prisma client for the DRM database.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "GPL-3.0",
+  "scripts": {
+    "build": "npx prisma generate && tsc",
+    "find-deadcode": "ts-prune"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "prisma": "^5.7.1",
+    "typescript": "^5.3.3"
+  },
+  "bundledDependencies": [
+    "@prisma/client",
+    ".prisma"
+  ]
+}

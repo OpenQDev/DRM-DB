@@ -1,0 +1,377 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mongodb"
+  // NOTE: When using postgresql, mysql or sqlserver, uncomment the @db.Text annotations in model Account below
+  // Further reading:
+  // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
+  // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
+  url      = env("DATABASE_URL")
+}
+
+// Necessary for Next auth
+
+model Account {
+  id                       String       @id @default(auto()) @map("_id") @db.ObjectId
+  user                     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                   String       @db.ObjectId
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String?
+  refresh_token_expires_in Int?
+  access_token             String?
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String?
+  session_state            String?
+  Evaluation               Evaluation[]
+
+  @@unique([provider, providerAccountId])
+}
+
+model Whitelist {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  githubName    String       @unique
+  quantity      Int          @default(1000)
+  createdAt     DateTime?    @default(now())
+  teamAccountId String?      @unique @db.ObjectId
+  teamAccount   TeamAccount? @relation(fields: [teamAccountId], references: [id])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                  String        @id @default(auto()) @map("_id") @db.ObjectId
+  name                String
+  role                String        @default("user")
+  email               String        @unique
+  emailVerified       DateTime?
+  contactEmail        String?
+  image               String?
+  accounts            Account[]
+  sessions            Session[]
+  firstName           String        @default("")
+  lastName            String        @default("")
+  lastSeen            DateTime      @default(now())
+  ownedTeamAccounts   TeamAccount[] @relation("TeamAccountOwners", fields: [ownedTeamAccountIds], references: [id])
+  ownedTeamAccountIds String[]      @db.ObjectId
+  teamAccounts        TeamAccount[] @relation(fields: [teamAccountIds], references: [id])
+  teamAccountIds      String[]      @db.ObjectId
+  notes               Note[]
+  evaluation          Evaluation[]
+}
+
+model VerificationToken {
+  identifier String   @id @map("_id")
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model OneTimeCodes {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  code          String      @unique
+  expires       DateTime
+  type          String      @default("teamAccountUserInvite")
+  email         String
+  createdAt     DateTime    @default(now())
+  teamAccount   TeamAccount @relation(fields: [teamAccountId], references: [id])
+  teamAccountId String      @db.ObjectId
+}
+
+model Subscription {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  teamAccounts TeamAccount[]
+  featureList  String[]
+}
+
+model TeamAccount {
+  id                     String          @id @default(auto()) @map("_id") @db.ObjectId
+  name                   String          @unique
+  aliasEmail             String          @unique
+  verifiedEmailAddresses String[]
+  inviteCodes            OneTimeCodes[]
+  teamAccountUsers       User[]          @relation(fields: [teamAccountUserIds], references: [id])
+  teamAccountUserIds     String[]        @db.ObjectId
+  contacts               Contact[]
+  emails                 Email[]
+  ownerIds               String[]        @db.ObjectId
+  owners                 User[]          @relation("TeamAccountOwners", fields: [ownerIds], references: [id])
+  emailThreads           EmailThread[]
+  campaigns              Campaign[]      @relation(fields: [campaignIds], references: [id])
+  campaignIds            String[]        @db.ObjectId
+  notes                  Note[]
+  targetContact          TargetContact[]
+  evaluation             Evaluation[]
+  subscriptionId         String?         @db.ObjectId
+  subscription           Subscription?   @relation(fields: [subscriptionId], references: [id])
+
+  whitelist Whitelist?
+}
+
+model Contact {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  name                String
+  createdAt           DateTime       @default(now())
+  email               String?
+  contactEmails       String[]
+  creatingTeamAccount TeamAccount    @relation(fields: [teamAccountId], references: [id])
+  teamAccountId       String         @db.ObjectId
+  emails              Email[]        @relation(fields: [emailIds], references: [id])
+  emailIds            String[]       @db.ObjectId
+  emailThreadIds      String[]
+  emailThreads        EmailThread[]  @relation(fields: [emailThreadIds], references: [id])
+  githubTargets       GithubTarget[] @relation(fields: [targetIds], references: [id])
+  targetIds           String[]       @db.ObjectId
+}
+
+model Email {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  to            String[]
+  bcc           String[]
+  cc            String[]
+  from          String
+  subject       String
+  text          String
+  sentByUser    Boolean
+  sentAt        DateTime    @default(now())
+  contactIds    String[]    @db.ObjectId
+  contacts      Contact[]   @relation(fields: [contactIds], references: [id])
+  teamAccountId String      @db.ObjectId
+  teamAccount   TeamAccount @relation(fields: [teamAccountId], references: [id])
+  messageId     String
+  emailThreadId String
+  emailThread   EmailThread @relation(fields: [emailThreadId], references: [id])
+}
+
+model EmailThread {
+  id            String         @id @map("_id")
+  emails        Email[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  teamAccount   TeamAccount    @relation(fields: [teamAccountId], references: [id])
+  contactIds    String[]       @db.ObjectId
+  contacts      Contact[]      @relation(fields: [contactIds], references: [id])
+  teamAccountId String         @db.ObjectId
+  githubTargets GithubTarget[] @relation(fields: [targetIds], references: [id])
+  targetIds     String[]       @db.ObjectId
+}
+
+model Note {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  teamAccount       TeamAccount   @relation(fields: [teamAccountId], references: [id])
+  teamAccountId     String        @db.ObjectId
+  subject           String        @default("")
+  text              String
+  teamAccountUser   User          @relation(fields: [teamAccountUserId], references: [id])
+  teamAccountUserId String        @db.ObjectId
+  githubTarget      GithubTarget? @relation(fields: [githubTargetId], references: [id])
+  githubTargetId    String?       @db.ObjectId
+}
+
+model TargetScout {
+  id                 String             @id @default(auto()) @map("_id") @db.ObjectId
+  campaignId         String             @db.ObjectId
+  campaign           Campaign           @relation(fields: [campaignId], references: [id])
+  dependencyName     String
+  dependencyFilename String
+  filter             TargetScoutFilter?
+}
+
+type TargetScoutFilter {
+  repoOwners       String?
+  repoCreatedDate  String?
+  repoStars        String?
+  repoForks        String?
+  userLocation     String?
+  userFollowers    String?
+  userRepositories String?
+  userLanguages    String?
+}
+
+model CustomField {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  key               String
+  bgColor           String?
+  type              String
+  targetType        String
+  campaignId        String             @db.ObjectId
+  campaign          Campaign           @relation(fields: [campaignId], references: [id])
+  customFieldValues CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  value_string    String
+  value_number    Float
+  value_date      DateTime
+  value_boolean   Boolean
+  customFieldId   String        @unique @db.ObjectId
+  customField     CustomField?  @relation(fields: [customFieldId], references: [id])
+  targetContactId String        @db.ObjectId
+  targetContact   TargetContact @relation(fields: [targetContactId], references: [id])
+}
+
+model TargetContact {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  githubTargetId   String?            @db.ObjectId
+  githubTarget     GithubTarget?      @relation(fields: [githubTargetId], references: [id])
+  industry         String?
+  projectOwner     String?
+  projectName      String?
+  type             String
+  location         String?
+  teamAccount      TeamAccount        @relation(fields: [teamAccountId], references: [id])
+  teamAccountId    String             @unique @db.ObjectId
+  status           String?
+  campaigns        Campaign[]         @relation(fields: [campaignIds], references: [id])
+  campaignIds      String[]           @db.ObjectId
+  customFieldValue CustomFieldValue[]
+}
+
+model GithubTarget {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  githubGraphqlId String          @unique
+  campaignIds     String[]        @db.ObjectId
+  campaigns       Campaign[]      @relation(fields: [campaignIds], references: [id])
+  reportIds       String[]        @db.ObjectId
+  reports         Report[]        @relation(fields: [reportIds], references: [id])
+  type            String
+  metadata        Json
+  displayName     String
+  evaluations     Evaluation[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  contactIds      String[]        @db.ObjectId
+  contacts        Contact[]       @relation(fields: [contactIds], references: [id])
+  targetContacts  TargetContact[]
+  emailThreadIds  String[]
+  notes           Note[]
+  emailThreads    EmailThread[]   @relation(fields: [emailThreadIds], references: [id])
+}
+
+model Campaign {
+  id               String          @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  githubTargets    GithubTarget[]  @relation(fields: [targetIds], references: [id])
+  targetIds        String[]        @db.ObjectId
+  createdAt        DateTime        @default(now())
+  dependenciesInfo Json?
+  teamAccounts     TeamAccount[]   @relation(fields: [teamAccountIds], references: [id])
+  teamAccountIds   String[]        @db.ObjectId
+  targetScouts     TargetScout[]
+  targetScoutIds   String[]        @db.ObjectId
+  budget           Int             @default(0)
+  lightMode        Boolean?
+  trackers         Tracker[]
+  startDate        DateTime        @default(now())
+  endDate          DateTime?
+  evaluation       Evaluation[]
+  targetContactIds String[]        @db.ObjectId
+  targetContacts   TargetContact[] @relation(fields: [targetContactIds], references: [id])
+  customFields     CustomField[]
+  archived         Boolean
+  archivedAt       DateTime?
+}
+
+model Tracker {
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  campaignId       String       @db.ObjectId
+  campaign         Campaign     @relation(fields: [campaignId], references: [id])
+  evaluations      Evaluation[]
+  trackerName      String       @unique
+  dependencies     String[]
+  defaultFileNames String[]
+  customFileNames  String[]
+}
+
+model Evaluation {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  campaign       Campaign     @relation(fields: [campaignId], references: [id])
+  campaignId     String       @db.ObjectId
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId      String       @db.ObjectId
+  teamAccount    TeamAccount  @relation(fields: [teamAccountId], references: [id])
+  teamAccountId  String       @db.ObjectId
+  githubTargetId String       @db.ObjectId
+  githubTarget   GithubTarget @relation(fields: [githubTargetId], references: [id])
+  type           String
+  params         Json?
+  query          String?
+  queryVariables Json?
+  paginators     Json?
+  maxPerPage     Int          @default(50)
+  dataId         String?      @unique @db.ObjectId
+  result         Json?
+  status         String       @default("waiting")
+  error          String?
+  parentId       String?      @db.ObjectId
+  parent         Evaluation?  @relation("nestedEvaluations", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children       Evaluation[] @relation("nestedEvaluations")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  trackerId      String?      @db.ObjectId
+  tracker        Tracker?     @relation(fields: [trackerId], references: [id])
+  User           User?        @relation(fields: [userId], references: [id])
+  userId         String?      @db.ObjectId
+}
+
+model Report {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  targetIds     String[]       @db.ObjectId
+  githubTargets GithubTarget[] @relation(fields: [targetIds], references: [id])
+  type          String
+  params        Json?
+  title         String
+  body          String
+  createdAt     DateTime       @default(now())
+}
+
+model GithubRepository {
+  id       String                   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  owner    String
+  url      String
+  branches GithubRepositoryBranch[]
+}
+
+model ZapierEvent {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  uuid      String
+  createdAt DateTime @default(now())
+  text      String?
+}
+
+type GithubRepositoryBranch {
+  name      String
+  isDefault Boolean
+  commits   GithubRepositoryCommit[]
+}
+
+type GithubRepositoryCommit {
+  hash         String
+  date         String
+  message      String
+  additions    Int
+  deletions    Int
+  filesChanged Int
+  authorName   String
+  authorEmail  String
+}
